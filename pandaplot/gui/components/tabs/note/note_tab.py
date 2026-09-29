@@ -89,10 +89,9 @@ class NoteTab(PWidget):
         return {"type": "note", "id": self.note.id}
 
     def can_close(self) -> bool:
-        """Check if the tab can be closed."""
+        """Flush pending note edits before the tab is removed."""
         if self.note_editor.has_unsaved_changes():
-            # TODO(#221): Show save dialog
-            return True  # For now, allow closing
+            return self.save()
         return True
 
     def save(self) -> bool:

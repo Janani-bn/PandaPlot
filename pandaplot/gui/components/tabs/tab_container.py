@@ -244,8 +244,12 @@ class TabContainer(PWidget):
         # Get tab title before removing
         tab_title = pane.tabText(index)
 
-        # Get the widget before removing the tab
+        # Leave the widget and its subscriptions intact if a pending edit
+        # cannot be saved. Other tab types have no close hook.
         widget = pane.widget(index)
+        can_close = getattr(widget, "can_close", None)
+        if callable(can_close) and not can_close():
+            return
 
         item_id_to_remove = None
         for curr_item_id, curr_tab in self.tabs.items():
@@ -287,6 +291,11 @@ class TabContainer(PWidget):
         """Close a tab by its associated item ID, if open."""
         # Popped-out tabs live in their own window; close it without re-docking.
         if item_id in self.floating_windows:
+            # Check the hosted tab before removing it from either registry.
+            content = self.tabs.get(item_id)
+            can_close = getattr(content, "can_close", None)
+            if callable(can_close) and not can_close():
+                return
             window = self.floating_windows.pop(item_id)
             self.tabs.pop(item_id, None)
             # Detach the content first so we can unsubscribe it synchronously

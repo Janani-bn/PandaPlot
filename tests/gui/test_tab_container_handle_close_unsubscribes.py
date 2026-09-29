@@ -126,3 +126,89 @@ def test_on_project_closed_unsubscribes_floating_window_content():
     window.close_without_redock.assert_called_once()
     assert container.floating_windows == {}
     assert container.tabs == {}
+
+
+def test_handle_close_checks_hook_before_removing_widget():
+    container = _container_stub()
+    widget = Mock()
+    widget.can_close.return_value = False
+    container.tabs["item-1"] = widget
+    pane = Mock()
+    pane.count.return_value = 1
+    pane.widget.return_value = widget
+
+    container._handle_close(pane, 0)
+
+    widget.can_close.assert_called_once_with()
+    pane.removeTab.assert_not_called()
+    widget.deleteLater.assert_not_called()
+    assert container.tabs["item-1"] is widget
+    container._persist_tab_session.assert_not_called()
+
+
+def test_handle_close_checks_hook_then_closes_on_success():
+    container = _container_stub()
+    widget = Mock()
+    widget.can_close.return_value = True
+    container.tabs["item-1"] = widget
+    pane = Mock()
+    pane.count.return_value = 1
+    pane.widget.return_value = widget
+
+    container._handle_close(pane, 0)
+
+    widget.can_close.assert_called_once_with()
+    pane.removeTab.assert_called_once_with(0)
+    widget.deleteLater.assert_called_once_with()
+
+
+def test_close_tab_by_item_id_keeps_floating_tab_on_failed_save():
+    container = _container_stub()
+    content = Mock()
+    content.can_close.return_value = False
+    window = Mock()
+    container.floating_windows = {"item-1": window}
+    container.tabs["item-1"] = content
+
+    container.close_tab_by_item_id("item-1")
+
+    content.can_close.assert_called_once_with()
+    window.take_content.assert_not_called()
+    window.close_without_redock.assert_not_called()
+    assert container.floating_windows["item-1"] is window
+    assert container.tabs["item-1"] is content
+
+
+def test_close_tab_by_item_id_checks_floating_hook_before_detaching():
+    container = _container_stub()
+    content = Mock()
+    content.can_close.return_value = True
+    window = Mock()
+    window.take_content.return_value = content
+    container.floating_windows = {"item-1": window}
+    container.tabs["item-1"] = content
+
+    container.close_tab_by_item_id("item-1")
+
+    content.can_close.assert_called_once_with()
+    window.take_content.assert_called_once_with()
+    assert "item-1" not in container.floating_windows
+
+
+def test_close_tab_by_item_id_floating_without_hook_still_closes():
+    container = _container_stub()
+
+    class _PlainWidget:
+        def deleteLater(self):
+            pass
+
+    content = _PlainWidget()
+    window = Mock()
+    window.take_content.return_value = content
+    container.floating_windows = {"item-1": window}
+    container.tabs["item-1"] = content
+
+    container.close_tab_by_item_id("item-1")
+
+    window.close_without_redock.assert_called_once_with()
+    assert "item-1" not in container.tabs

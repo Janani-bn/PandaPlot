@@ -90,3 +90,33 @@ def test_init_registers_as_an_unsaved_changes_source(qapp):
 
     assert call(UnsavedChangesRegistry) in app_context.get_manager.call_args_list
     app_context.get_manager.return_value.register.assert_called_once_with(tab)
+
+
+def test_can_close_flushes_dirty_note_through_existing_save_path():
+    tab = NoteTab.__new__(NoteTab)
+    tab.note_editor = Mock()
+    tab.note_editor.has_unsaved_changes.return_value = True
+    tab.save = Mock(return_value=True)
+
+    assert tab.can_close() is True
+    tab.save.assert_called_once_with()
+
+
+def test_can_close_does_not_save_clean_note():
+    tab = NoteTab.__new__(NoteTab)
+    tab.note_editor = Mock()
+    tab.note_editor.has_unsaved_changes.return_value = False
+    tab.save = Mock()
+
+    assert tab.can_close() is True
+    tab.save.assert_not_called()
+
+
+def test_can_close_blocks_failed_save():
+    tab = NoteTab.__new__(NoteTab)
+    tab.note_editor = Mock()
+    tab.note_editor.has_unsaved_changes.return_value = True
+    tab.note_editor.save_content.return_value = False
+
+    assert tab.can_close() is False
+    tab.note_editor.save_content.assert_called_once_with(track_undo=False)
