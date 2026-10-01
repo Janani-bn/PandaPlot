@@ -53,19 +53,21 @@ def app_window(qtbot: QtBot, qapp: QApplication, monkeypatch: pytest.MonkeyPatch
     notice_timer.timeout.connect(acknowledge_notice)
     notice_timer.start(10)
     yield window
-    notice_timer.stop()
-    context.get_manager(AutoSaveManager).stop()
-    context.task_scheduler.cancel_all()
-    assert context.task_scheduler.threadpool.waitForDone(5000)
-    qapp.processEvents()
-    for widget in QApplication.topLevelWidgets():
-        if isinstance(widget, QDialog):
-            widget.reject()
-    # Teardown must not open a save/discard dialog for deliberate test edits.
-    context.app_state.mark_saved()
-    window._is_closing = True
-    window.close()
-    qapp.setStyleSheet(original_stylesheet)
-    qapp.setPalette(original_palette)
-    qapp.setFont(original_font)
-    assert not window.test_dialog_errors
+    try:
+        notice_timer.stop()
+        context.get_manager(AutoSaveManager).stop()
+        context.task_scheduler.cancel_all()
+        assert context.task_scheduler.threadpool.waitForDone(5000)
+        qapp.processEvents()
+        for widget in QApplication.topLevelWidgets():
+            if isinstance(widget, QDialog):
+                widget.reject()
+        # Teardown must not open a save/discard dialog for deliberate test edits.
+        context.app_state.mark_saved()
+        window._is_closing = True
+        window.close()
+    finally:
+        qapp.setStyleSheet(original_stylesheet)
+        qapp.setPalette(original_palette)
+        qapp.setFont(original_font)
+        assert not window.test_dialog_errors
