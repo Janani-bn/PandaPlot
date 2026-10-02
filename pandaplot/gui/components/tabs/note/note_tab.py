@@ -10,15 +10,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pandaplot.commands.project.current_project import get_current_project
+from pandaplot.commands.project.project.save_project_command import SaveProjectCommand
 from pandaplot.gui.components.tabs.note.note_editor import NoteEditorWidget
 from pandaplot.gui.core.widget_extension import PWidget
 from pandaplot.models.events import NoteEvents
 from pandaplot.models.events.event_types import ProjectEvents
 from pandaplot.models.project.items.note import Note
 from pandaplot.models.state.app_context import AppContext
+from pandaplot.models.state.unsaved_changes_registry import UnsavedChangesRegistry
 from pandaplot.services.config import ConfigManager
-from pandaplot.services.data_managers.project_manager import ProjectManager
 
 
 class NoteTab(PWidget):
@@ -90,53 +90,80 @@ class NoteTab(PWidget):
         return {"type": "note", "id": self.note.id}
 
     def can_close(self) -> bool:
-        """Prompt on user-close when auto-save is disabled, otherwise flush.
-
-        This hook is for a user closing one tab/window. Project teardown and
-        item removal bypass it and follow their respective lifecycle rules.
-        """
+        """Resolve dirty editor text before a user closes this tab/window."""
         if not self.note_editor.has_unsaved_changes():
             return True
 
+        app_state = self.app_context.get_app_state()
         autosave_enabled = self.app_context.get_manager(ConfigManager).config.auto_save.enabled
-        if autosave_enabled:
-            return self._flush_and_save_project(track_undo=False)
+        has_save_path = bool(app_state.project_file_path)
 
-        choice = self.app_context.get_ui_controller().show_save_discard_cancel("Unsaved Note", f"Save changes to '{self.note.name}' before closing?")
+        # Auto-save can persist saved projects, but a new project has nowhere
+        # to write yet. Let its owner choose Save (commit to model), Discard,
+        # or Cancel rather than trapping the note behind a failed auto-save.
+        if autosave_enabled and has_save_path:
+            if app_state.is_saving:
+                self.app_context.get_ui_controller().show_error_message(
+                    "Save In Progress",
+                    "The project is already being saved. Wait for it to finish, then close the note.",
+                )
+                return False
+            if not self._commit_note(track_undo=False):
+                return False
+            return self._save_project_after_flush()
+
+        choice = self.app_context.get_ui_controller().show_save_discard_cancel(
+            "Unsaved Note",
+            f"Save changes to '{self.note.name}' before closing?",
+        )
         if choice == "discard":
             return True
         if choice != "save":
             return False
-        return self._flush_and_save_project(track_undo=True)
-
-    def _flush_and_save_project(self, *, track_undo: bool) -> bool:
-        """Commit the editor value, then persist the current project file."""
-        app_state = self.app_context.get_app_state()
-        project = get_current_project(self.app_context)
-        ui_controller = self.app_context.get_ui_controller()
-        if project is None or not app_state.project_file_path:
-            ui_controller.show_error_message("Save Failed", "This project has no save path. Use Save As before closing this note.")
+        if has_save_path and app_state.is_saving:
+            self.app_context.get_ui_controller().show_error_message(
+                "Save In Progress",
+                "The project is already being saved. Wait for it to finish, then close the note.",
+            )
             return False
-        if app_state.is_saving:
-            ui_controller.show_error_message("Save In Progress", "The project is already being saved. Wait for it to finish, then close the note.")
+        if not self._commit_note(track_undo=True):
             return False
 
+        # With no path, committing the editor to the project model preserves
+        # the edit for the normal project-level save/discard prompt.
+        if not has_save_path:
+            return True
+        return self._save_project_after_flush()
+
+    def _save_project_after_flush(self) -> bool:
+        """Flush other local edits before starting the standard async save."""
+        registry = self.app_context.get_manager(UnsavedChangesRegistry)
+        if not registry.flush_all():
+            self.app_context.get_ui_controller().show_error_message("Unsaved Changes", "An open note could not be saved. The tab will stay open.")
+            return False
+        return self._save_project()
+
+    def _commit_note(self, *, track_undo: bool) -> bool:
         try:
-            saved_note = self.note_editor.save_content(track_undo=track_undo)
+            saved = self.note_editor.save_content(track_undo=track_undo)
         except Exception:  # noqa: BLE001 - a user close must leave the tab open on failure
-            saved_note = False
-        if not saved_note:
-            ui_controller.show_error_message("Save Failed", "The note edit could not be applied; the tab will stay open.")
-            return False
+            saved = False
+        if not saved:
+            self.app_context.get_ui_controller().show_error_message("Save Failed", "The note edit could not be applied; the tab will stay open.")
+        return saved
 
-        try:
-            self.app_context.get_manager(ProjectManager).save_project(project, app_state.project_file_path)
-        except Exception as error:  # noqa: BLE001 - keep the tab open and report persistence failures
-            self.note_editor.is_modified = True
-            ui_controller.show_error_message("Save Failed", f"The note could not be saved:\n{error}")
+    def _save_project(self) -> bool:
+        """Start the standard async project-save command for the current path."""
+        command = SaveProjectCommand(self.app_context)
+        if self.app_context.get_command_executor().execute_command(command, track_undo=False):
+            return True
+        if self.app_context.get_app_state().is_saving:
             return False
-        app_state.mark_saved()
-        return True
+        # SaveProjectCommand handles its own failures with UI feedback. A
+        # command rejected before dispatch (e.g. no project) still keeps the
+        # tab open and reports a failure here.
+        self.app_context.get_ui_controller().show_error_message("Save Failed", "The project could not be saved; the note will stay open.")
+        return False
 
     def save(self) -> bool:
         """Save the note for UnsavedChangesRegistry's flush. Returns whether

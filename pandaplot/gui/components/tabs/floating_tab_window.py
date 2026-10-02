@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from typing import override
 
 from PySide6.QtCore import Qt, Signal
@@ -19,14 +18,12 @@ class FloatingTabWindow(PMainWindow):
     """
 
     redock_requested = Signal(str)  # item_id
-    close_requested = Signal(str)  # user requested removal rather than redocking
 
     def __init__(self, app_context: AppContext, item_id: str, content: QWidget, title: str):
         super().__init__(app_context=app_context)
         self.item_id = item_id
         self._content = content
         self._redock_on_close = True
-        self.close_guard: Callable[[str], bool] | None = None
 
         # Do not keep the application alive on our own, and clean ourselves up
         # once closed so redocked/closed windows don't leak.
@@ -76,9 +73,6 @@ class FloatingTabWindow(PMainWindow):
     @override
     def closeEvent(self, event):
         if self._redock_on_close and self._content is not None:
-            if self.close_guard is not None and not self.close_guard(self.item_id):
-                event.ignore()
-                return
             self._redock_on_close = False
-            self.close_requested.emit(self.item_id)
+            self.redock_requested.emit(self.item_id)
         super().closeEvent(event)
