@@ -26,6 +26,7 @@ from pandaplot.commands.project.fit.perform_fit_command import PerformFitCommand
 from pandaplot.gui.components.common.busy_spinner import BusySpinner
 from pandaplot.gui.components.common.p_button import PButton
 from pandaplot.gui.components.sidebar.panels.sidebar_panel import SidebarPanel
+from pandaplot.models.chart.chart_type_spec import get_chart_type_spec
 from pandaplot.models.events import ChartEvents, UIEvents
 from pandaplot.models.project.items import Dataset
 from pandaplot.models.project.items.chart import DataSeries, resolve_series_column
@@ -226,13 +227,18 @@ class FitPanel(SidebarPanel):
         points_layout.addStretch()
 
         data_layout.addLayout(points_layout, 2, 1)
+        self.fit_availability_label = QLabel()
+        self.fit_availability_label.setWordWrap(True)
+        self.fit_availability_label.setStyleSheet("color: #b45309;")
+        self.fit_availability_label.setVisible(False)
+        data_layout.addWidget(self.fit_availability_label, 3, 0, 1, 2)
 
         layout.addWidget(data_group)
 
     def _create_fit_config_section(self, layout):
         """Create the fit configuration section."""
-        fit_group = QGroupBox("Fit Configuration")
-        fit_layout = QVBoxLayout(fit_group)
+        self.fit_configuration_group = QGroupBox("Fit Configuration")
+        fit_layout = QVBoxLayout(self.fit_configuration_group)
 
         # Fit type selection
         type_layout = QHBoxLayout()
@@ -344,7 +350,7 @@ class FitPanel(SidebarPanel):
         range_layout.addWidget(self.range_warning_label, 3, 0, 1, 2)
 
         fit_layout.addLayout(range_layout)
-        layout.addWidget(fit_group)
+        layout.addWidget(self.fit_configuration_group)
 
     def _create_results_section(self, layout):
         """Create the results display section."""
@@ -584,12 +590,49 @@ class FitPanel(SidebarPanel):
             self.load_chart_object(None)
             self.logger.debug("Fit panel context cleared")
 
+    def _chart_disallows_fit(self) -> bool:
+        """Whether the active chart type has no meaningful 2-D curve to fit."""
+        return self.current_chart is not None and not get_chart_type_spec(self.current_chart.chart_type).allows_fit
+
+    def _fit_unavailable_reason(self) -> str | None:
+        """Explain chart- or series-level reasons a curve fit cannot run."""
+        if self.current_chart is None:
+            return None
+        chart_spec = get_chart_type_spec(self.current_chart.chart_type)
+        if not chart_spec.allows_fit:
+            return f"Curve fits aren't available for {chart_spec.display_name} charts. Use an XY chart instead."
+
+        series = self._resolve_selected_series()
+        if series is None:
+            if self.current_chart.data_series and not self.current_chart.data_series[0].x_column_id and not self.current_chart.data_series[0].x_column:
+                return "This series has no X column for curve fitting. Select an XY series or choose Custom... with X and Y columns."
+            return None
+        dataset = self.current_project.find_item(series.dataset_id) if self.current_project else None
+        if not isinstance(dataset, Dataset):
+            return None
+        x_column = resolve_series_column(dataset, series.x_column_id, series.x_column)
+        if not x_column or x_column not in dataset.data.columns:
+            return "This series has no X column for curve fitting. Select an XY series or choose Custom... with X and Y columns."
+        return None
+
     def update_data_points_display(self):
         """Update the data points display and enable/disable the Fit button accordingly."""
         theme_manager = self.app_context.get_manager(ThemeManager)
         palette = theme_manager.get_surface_palette()
         base_fg = palette.get("base_fg", "#333333")
         secondary_fg = palette.get("secondary_fg", "#555555")
+
+        unavailable_reason = self._fit_unavailable_reason()
+        self.fit_availability_label.setText(unavailable_reason or "")
+        self.fit_availability_label.setVisible(bool(unavailable_reason))
+        self.fit_availability_label.setHidden(not bool(unavailable_reason))
+        self.fit_configuration_group.setEnabled(not self._chart_disallows_fit())
+        self.series_combo.setEnabled(self.current_chart is not None and not self._chart_disallows_fit())
+        self.custom_source_widget.setEnabled(not self._chart_disallows_fit())
+        if unavailable_reason and self._chart_disallows_fit():
+            self.fit_button.setEnabled(False)
+            self.fit_button.setToolTip(unavailable_reason)
+            return
 
         range_valid = self._is_range_valid()
         self.range_warning_label.setVisible(not range_valid)
@@ -933,6 +976,8 @@ class FitPanel(SidebarPanel):
 
     def _perform_fit(self):
         """Create and execute a curve fitting command."""
+        if self._fit_unavailable_reason():
+            return
         # update_data_points_display() (fired by unrelated range/series
         # changes while a fit is in flight) re-enables fit_button based only
         # on data validity, not on whether a fit is already running -- so a
