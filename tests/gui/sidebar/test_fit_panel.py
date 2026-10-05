@@ -1475,3 +1475,57 @@ def test_load_chart_object_offers_no_series_when_chart_type_disallows_fits(app_c
     panel.load_chart_object(chart)
 
     assert panel.series_combo.count() > 1
+
+
+def _make_hist_panel(app_context):
+    from pandaplot.models.chart.chart_type import ChartType
+
+    dataset = Dataset(id="values", name="values", data=pd.DataFrame({"value": [1.0, 2.0, 3.0, 4.0, 5.0]}))
+    chart = Chart(id="hist-chart", name="hist chart", chart_type=ChartType.HIST)
+    chart.add_data_series(dataset_id=dataset.id, y_column_id=dataset.column_id("value"))
+    project = Mock()
+    project.find_item = Mock(return_value=dataset)
+    project.get_all_items = Mock(return_value=[dataset])
+    panel = FitPanel(app_context)
+    panel.app_context.app_state = Mock()
+    panel.app_context.app_state.current_project = project
+    panel.load_chart_object(chart)
+    return panel
+
+
+def test_custom_mode_with_incomplete_picks_does_not_show_no_x_column_reason(app_context):
+    """Regression test for #468: Custom... is a user-in-progress state, not a series without X."""
+    panel = _make_hist_panel(app_context)
+    assert panel.fit_availability_label.isHidden() is False
+
+    panel.series_combo.setCurrentIndex(panel.series_combo.findData(CUSTOM_SERIES_SENTINEL))
+    panel.custom_x_column_combo.setCurrentIndex(-1)
+
+    assert panel._resolve_selected_series() is None
+    assert panel._fit_unavailable_reason() is None
+    assert panel.fit_availability_label.isHidden() is True
+
+
+def test_fit_button_disabled_with_reason_tooltip_for_series_without_x_column(app_context):
+    """Regression test for #469: a series-level unavailable reason must not leave Fit clickable."""
+    panel = _make_hist_panel(app_context)
+
+    assert panel.fit_availability_label.isHidden() is False
+    assert panel.fit_button.isEnabled() is False
+    assert panel.fit_button.toolTip() == panel.fit_availability_label.text()
+
+
+def test_switching_to_unsupported_chart_clears_stale_points_and_range_warning(app_context):
+    """Regression test for #470: chart-level disallowance must clear the previous chart's readouts."""
+    panel, _executed = _build_panel_ready_to_fit(app_context)
+    assert panel.data_points_label.text() != "No data selected"
+    panel.range_warning_label.setVisible(True)
+
+    panel.app_context.app_state.current_project.get_all_items = Mock(return_value=[])
+    panel.load_chart_object(Chart(id="box-chart", name="box chart", chart_type="box"))
+
+    assert panel.data_points_label.text() == "No data selected"
+    assert panel.range_min_value_label.text() == "—"
+    assert panel.range_max_value_label.text() == "—"
+    assert panel.range_warning_label.isHidden() is True
+    assert panel.data_points_warning_icon.isHidden() is True

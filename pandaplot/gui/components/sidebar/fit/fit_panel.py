@@ -604,6 +604,9 @@ class FitPanel(SidebarPanel):
 
         series = self._resolve_selected_series()
         if series is None:
+            # Custom... with incomplete picks is a user-in-progress state, not a series without X.
+            if self.series_combo.currentData() == CUSTOM_SERIES_SENTINEL:
+                return None
             if self.current_chart.data_series and not self.current_chart.data_series[0].x_column_id and not self.current_chart.data_series[0].x_column:
                 return "This series has no X column for curve fitting. Select an XY series or choose Custom... with X and Y columns."
             return None
@@ -625,13 +628,20 @@ class FitPanel(SidebarPanel):
         unavailable_reason = self._fit_unavailable_reason()
         self.fit_availability_label.setText(unavailable_reason or "")
         self.fit_availability_label.setVisible(bool(unavailable_reason))
-        self.fit_availability_label.setHidden(not bool(unavailable_reason))
         self.fit_configuration_group.setEnabled(not self._chart_disallows_fit())
         self.series_combo.setEnabled(self.current_chart is not None and not self._chart_disallows_fit())
         self.custom_source_widget.setEnabled(not self._chart_disallows_fit())
         if unavailable_reason and self._chart_disallows_fit():
             self.fit_button.setEnabled(False)
             self.fit_button.setToolTip(unavailable_reason)
+            # Clear data readouts left over from the previously loaded chart.
+            self.range_warning_label.setVisible(False)
+            self.range_min_value_label.setText("—")
+            self.range_max_value_label.setText("—")
+            self.data_points_label.setText("No data selected")
+            self.data_points_label.setStyleSheet(f"color: {secondary_fg}; font-style: italic;")
+            self.data_points_label.setToolTip("")
+            self.data_points_warning_icon.setVisible(False)
             return
 
         range_valid = self._is_range_valid()
@@ -684,6 +694,12 @@ class FitPanel(SidebarPanel):
             self.data_points_warning_icon.setVisible(True)
             self.fit_button.setEnabled(False)
             self.fit_button.setToolTip(tooltip)
+
+        if unavailable_reason:
+            # Series-level reason (e.g. no X column): data readouts above may
+            # still be valid for Y alone, but a fit cannot run.
+            self.fit_button.setEnabled(False)
+            self.fit_button.setToolTip(unavailable_reason)
 
     def _on_fit_type_changed(self):
         """Handle fit type selection change."""
