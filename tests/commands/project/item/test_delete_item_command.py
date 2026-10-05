@@ -479,7 +479,9 @@ class TestDeleteItemCommand:
         
         result = command.redo()
 
-        assert result is CommandResult.FAILURE
+        # Removal failed with the item still in the project: nothing changed, so
+        # the redo is ABORTED (the command stays on the redo stack).
+        assert result is CommandResult.ABORTED
         ui_controller.show_error_message.assert_called_once()
         assert "Failed to redo delete item: Test error" in ui_controller.show_error_message.call_args[0][1]
 

@@ -208,10 +208,36 @@ def test_failed_remove_in_redo_restores_cascaded_dependents(monkeypatch):
     assert command.execute() is CommandResult.SUCCESS
     assert command.undo() is CommandResult.SUCCESS
     monkeypatch.setattr(project, "remove_item", Mock(side_effect=RuntimeError("boom")))
-    assert command.redo() is CommandResult.FAILURE
+    live_dataset = project.find_item("data")
+    assert command.redo() is CommandResult.ABORTED
+    assert project.find_item("data") is live_dataset
     assert [s.dataset_id for s in chart.data_series] == ["data"]
+
+
+def test_aborted_redo_leaves_collection_untouched(monkeypatch):
+    ctx, _, project = _make_delete_setup()
+    folder = Folder(id="folder")
+    note = Note(id="note", content="keep")
+    project.add_item(folder)
+    project.add_item(note, folder.id)
+    command = DeleteItemCommand(ctx, folder.id, confirm=False)
+    assert command.execute() is CommandResult.SUCCESS
     assert command.undo() is CommandResult.SUCCESS
-    assert [s.dataset_id for s in chart.data_series] == ["data"]
+    live_folder = project.find_item("folder")
+    live_note = project.find_item("note")
+    monkeypatch.setattr(project, "remove_item", Mock(side_effect=RuntimeError("boom")))
+    assert command.redo() is CommandResult.ABORTED
+    assert project.find_item("folder") is live_folder
+    assert project.find_item("note") is live_note
+
+
+def test_add_item_rejects_descendant_using_project_root_id():
+    project = Project("Test")
+    folder = Folder(id="folder")
+    folder.add_item(Note(id=project.root.id))
+    with pytest.raises(ValueError, match="root"):
+        project.add_item(folder)
+    assert project.find_item("folder") is None
 
 
 def _removed_ids(state):

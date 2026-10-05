@@ -91,6 +91,11 @@ class DeleteItemCommand(Command):
         keys = list(parent.items.keys())
         return keys.index(item.id) if item.id in keys else None
 
+    def _subtree_intact(self, project, item: Item, subtree_ids: set) -> bool:
+        """True if `item` is still attached and every id in its subtree is
+        still indexed, i.e. a failed removal changed nothing."""
+        return project.find_item(item.id) is item and all(project.find_item(i) is not None for i in subtree_ids)
+
     def _remove_with_rollback(self, project, item: Item) -> None:
         """Remove `item`; if that raises, undo the dependency cascade already
         applied so no dependent is left stripped, then re-raise."""
@@ -317,7 +322,18 @@ class DeleteItemCommand(Command):
             self._apply_dependency_cleanup(project, self._collect_ids_under(item))
 
             # Remove the item from the project
-            self._remove_with_rollback(project, item)
+            subtree_ids = self._collect_ids_under(item)
+            try:
+                self._remove_with_rollback(project, item)
+            except Exception as remove_error:
+                if not self._subtree_intact(project, item, subtree_ids):
+                    raise
+                # Nothing was removed and dependents are restored, so report
+                # ABORTED: the command stays on the redo stack instead of
+                # moving to the undo stack and replaying over a live item.
+                self.logger.exception("DeleteItemCommand: redo aborted, removal failed (id=%s)", self.item_id)
+                self.ui_controller.show_error_message("Redo Error", f"Failed to redo delete item: {remove_error!s}")
+                return CommandResult.ABORTED
             self.deleted_item_data = item_data
             self._deleted_index = sibling_index
             self._deleted_collection = collection_snapshot

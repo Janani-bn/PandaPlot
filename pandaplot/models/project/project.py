@@ -45,7 +45,7 @@ class Project:
 
         Raises:
             ValueError: If the item's subtree reuses an id already in the
-                project (held by a different item; the added item itself may still
+                project (the root id included; held by a different item; the added item itself may still
                 overwrite one) or within the subtree, or
                 a descendant's parent_id does not match its container. The
                 project is left unchanged.
@@ -78,6 +78,10 @@ class Project:
             if current.id in seen:
                 raise ValueError(f"Duplicate item id '{current.id}' within the added subtree")
             seen.add(current.id)
+            # The root is not in items_index, but find_item() always resolves its
+            # id to the root, so a subtree item reusing it would be unreachable.
+            if current.id == self.root.id:
+                raise ValueError(f"Item id '{current.id}' is the project root id")
             existing = self.items_index.get(current.id)
             # The added item itself keeps the long-standing overwrite behaviour
             # for a duplicate id; only descendants must not clobber other items.
