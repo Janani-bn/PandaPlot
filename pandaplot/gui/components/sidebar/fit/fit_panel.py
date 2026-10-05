@@ -1012,8 +1012,10 @@ class FitPanel(SidebarPanel):
 
         def _on_complete(result):
             self.busy_spinner.stop()
-            self.fit_button.setEnabled(self.scipy_available)
             self._pending_fit_command = None
+            # Recompute from the current chart/selection: the chart may have
+            # switched to an unsupported one while the fit was in flight.
+            self.update_data_points_display()
 
             current_series = self._resolve_selected_series()
             current_context = (
@@ -1077,7 +1079,7 @@ class FitPanel(SidebarPanel):
             # on_complete never fires, so the previous result is still valid
             # and Apply's enabled state must be restored, not left disabled.
             self.busy_spinner.stop()
-            self.fit_button.setEnabled(self.scipy_available)
             self.apply_button.setEnabled(apply_was_enabled)
             self._pending_fit_command = None
+            self.update_data_points_display()
 

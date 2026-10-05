@@ -1166,6 +1166,27 @@ def test_perform_fit_discards_stale_result_after_chart_switch(app_context):
     assert panel.fit_button.isEnabled() is True
 
 
+def test_perform_fit_completion_keeps_fit_disabled_after_switch_to_unsupported_chart(app_context):
+    """Regression test (PR review): an in-flight fit completing after the user
+    loads a chart without fit support must not re-enable the Fit button."""
+    panel, executed = _build_panel_ready_to_fit(app_context)
+
+    panel._perform_fit()
+    command = executed["command"]
+
+    panel.app_context.app_state.current_project.get_all_items = Mock(return_value=[])
+    panel.load_chart_object(Chart(id="box-chart", name="box chart", chart_type="box"))
+    assert panel.fit_button.isEnabled() is False
+
+    command.result = _make_fake_fit_result()
+    command.fixed_parameters = None
+    command.on_complete(CommandResult.SUCCESS)
+
+    assert panel.busy_spinner.is_running is False
+    assert panel.fit_button.isEnabled() is False
+    assert panel.fit_availability_label.isHidden() is False
+
+
 def test_perform_fit_success_path_populates_results_and_stops_spinner(app_context):
     panel, executed = _build_panel_ready_to_fit(app_context)
 
