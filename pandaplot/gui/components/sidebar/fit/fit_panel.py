@@ -785,7 +785,13 @@ class FitPanel(SidebarPanel):
             self.busy_spinner.stop()
 
     def load_chart_object(self, chart):
-        """Load a Chart object for fitting analysis."""
+        """Load a Chart object for fitting analysis.
+
+        A chart whose type has ``allows_fit=False`` (Stacked Bar, Density, ...)
+        stays the panel's current chart, so deferred refreshes and event
+        filtering keep working when its type changes back, but none of its
+        series are offered to fit.
+        """
         self._clear_results()
         self.current_chart = chart
 
@@ -796,7 +802,7 @@ class FitPanel(SidebarPanel):
         self.series_combo.blockSignals(True)  # noqa: FBT003 - Qt bound method, positional-only
         self.series_combo.clear()
 
-        if chart is None:
+        if chart is None or not get_chart_type_spec(chart.chart_type).allows_fit:
             self.series_combo.blockSignals(False)  # noqa: FBT003 - Qt bound method, positional-only
             self.custom_source_widget.setVisible(False)
             self.update_data_points_display()
