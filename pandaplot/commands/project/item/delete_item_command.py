@@ -35,6 +35,7 @@ class DeleteItemCommand(Command):
         self.deleted_item_class: type[Item] | None = None
         self._deleted_collection: ItemCollection | None = None
         self.parent_item: Item | None = None
+        self._deleted_index: int | None = None
 
         # Items whose on_items_removed() hook fired because they referenced
         # something being deleted, keyed by item id -- captured fresh in
@@ -81,6 +82,24 @@ class DeleteItemCommand(Command):
             if item is not None:
                 item.restore_removed_items_snapshot(snapshot)
                 self._emit_dependency_update_event(item)
+
+    def _sibling_index(self, project, item: Item) -> int | None:
+        """Position of `item` among its siblings, so undo() can put it back."""
+        parent = project.find_item(item.parent_id) if item.parent_id else project.root
+        if not isinstance(parent, ItemCollection):
+            return None
+        keys = list(parent.items.keys())
+        return keys.index(item.id) if item.id in keys else None
+
+    def _remove_with_rollback(self, project, item: Item) -> None:
+        """Remove `item`; if that raises, undo the dependency cascade already
+        applied so no dependent is left stripped, then re-raise."""
+        try:
+            project.remove_item(item)
+        except Exception:
+            self._restore_dependency_cleanup(project)
+            self._snapshots = {}
+            raise
 
     def _emit_dependency_update_event(self, item: Item) -> None:
         event = item.dependency_update_event()
@@ -143,11 +162,13 @@ class DeleteItemCommand(Command):
             # state is only stored once the delete has actually succeeded.
             item_data = item.to_dict()
             collection_snapshot = deepcopy(item) if isinstance(item, ItemCollection) else None
+            sibling_index = self._sibling_index(project, item)
             self._apply_dependency_cleanup(project, self._collect_ids_under(item))
 
             # Remove the item from the project
-            project.remove_item(item)
+            self._remove_with_rollback(project, item)
 
+            self._deleted_index = sibling_index
             self.deleted_item_class = item_class
             self.deleted_item_data = item_data
             self._deleted_collection = collection_snapshot
@@ -205,7 +226,7 @@ class DeleteItemCommand(Command):
                 parent_id = self.parent_item.id
 
             # Add the item back to the project
-            project.add_item(restored_item, parent_id=parent_id)
+            project.add_item(restored_item, parent_id=parent_id, index=self._deleted_index)
 
             # Restore any items this delete had cascaded into.
             self._restore_dependency_cleanup(project)
@@ -263,6 +284,7 @@ class DeleteItemCommand(Command):
             # state at redo time rather than at the original delete.
             item_data = item.to_dict()
             collection_snapshot = deepcopy(item) if isinstance(item, ItemCollection) else None
+            sibling_index = self._sibling_index(project, item)
 
             # Re-run the dependency cascade -- undo() put those references
             # back, so this recomputes fresh rather than assuming last
@@ -270,8 +292,9 @@ class DeleteItemCommand(Command):
             self._apply_dependency_cleanup(project, self._collect_ids_under(item))
 
             # Remove the item from the project
-            project.remove_item(item)
+            self._remove_with_rollback(project, item)
             self.deleted_item_data = item_data
+            self._deleted_index = sibling_index
             self._deleted_collection = collection_snapshot
 
             # Get item info for logging and events
@@ -310,3 +333,4 @@ class DeleteItemCommand(Command):
         self.parent_item = None
         self._snapshots = {}
         self._deleted_collection = None
+        self._deleted_index = None

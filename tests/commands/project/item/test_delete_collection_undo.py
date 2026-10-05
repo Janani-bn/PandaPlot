@@ -163,3 +163,51 @@ def test_undo_after_redo_restores_standalone_item_edited_before_redo():
     assert command.redo() is CommandResult.SUCCESS
     assert command.undo() is CommandResult.SUCCESS
     assert project.find_item("note").content == "edited"
+
+
+@pytest.mark.parametrize("parent_in_folder", [False, True])
+def test_undo_restores_original_sibling_position(parent_in_folder):
+    ctx, _, project = _make_delete_setup()
+    holder = Folder(id="holder")
+    project.add_item(holder)
+    parent_id = holder.id if parent_in_folder else None
+    for item_id in ["a", "b", "c"]:
+        project.add_item(Folder(id=item_id), parent_id)
+    siblings = holder if parent_in_folder else project.root
+    command = DeleteItemCommand(ctx, "b", confirm=False)
+    assert command.execute() is CommandResult.SUCCESS
+    for _ in range(2):
+        assert command.undo() is CommandResult.SUCCESS
+        assert [i.id for i in siblings.get_items() if i.id in "abc"] == ["a", "b", "c"]
+        assert command.redo() is CommandResult.SUCCESS
+
+
+def _chart_referencing_dataset(project):
+    dataset = Dataset(id="data", data=pd.DataFrame({"x": [1, 2]}))
+    chart = Chart(id="chart")
+    chart.add_data_series(dataset.id, label="s1")
+    project.add_item(dataset)
+    project.add_item(chart)
+    return dataset, chart
+
+
+def test_failed_remove_in_execute_restores_cascaded_dependents(monkeypatch):
+    ctx, _, project = _make_delete_setup()
+    dataset, chart = _chart_referencing_dataset(project)
+    monkeypatch.setattr(project, "remove_item", Mock(side_effect=RuntimeError("boom")))
+    command = DeleteItemCommand(ctx, dataset.id, confirm=False)
+    assert command.execute() is CommandResult.FAILURE
+    assert [s.dataset_id for s in chart.data_series] == ["data"]
+
+
+def test_failed_remove_in_redo_restores_cascaded_dependents(monkeypatch):
+    ctx, _, project = _make_delete_setup()
+    dataset, chart = _chart_referencing_dataset(project)
+    command = DeleteItemCommand(ctx, dataset.id, confirm=False)
+    assert command.execute() is CommandResult.SUCCESS
+    assert command.undo() is CommandResult.SUCCESS
+    monkeypatch.setattr(project, "remove_item", Mock(side_effect=RuntimeError("boom")))
+    assert command.redo() is CommandResult.FAILURE
+    assert [s.dataset_id for s in chart.data_series] == ["data"]
+    assert command.undo() is CommandResult.SUCCESS
+    assert [s.dataset_id for s in chart.data_series] == ["data"]
