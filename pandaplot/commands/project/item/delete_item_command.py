@@ -299,3 +299,4 @@ class DeleteItemCommand(Command):
         self.deleted_item_class = None
         self.parent_item = None
         self._snapshots = {}
+        self._deleted_collection = None
