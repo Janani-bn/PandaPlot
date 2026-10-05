@@ -258,17 +258,20 @@ class DeleteItemCommand(Command):
                 self.logger.warning("DeleteItemCommand.redo: item '%s' not found", self.item_id)
                 return CommandResult.FAILURE
 
+            # Re-snapshot the item as it is now, before the cascade touches
+            # anything (as execute() does), so a later undo restores the
+            # state at redo time rather than at the original delete.
+            item_data = item.to_dict()
+            collection_snapshot = deepcopy(item) if isinstance(item, ItemCollection) else None
+
             # Re-run the dependency cascade -- undo() put those references
             # back, so this recomputes fresh rather than assuming last
             # time's result still applies.
             self._apply_dependency_cleanup(project, self._collect_ids_under(item))
 
-            # Re-snapshot the subtree as it is now, so a later undo restores
-            # the state at redo time rather than at the original delete.
-            collection_snapshot = deepcopy(item) if isinstance(item, ItemCollection) else None
-
             # Remove the item from the project
             project.remove_item(item)
+            self.deleted_item_data = item_data
             self._deleted_collection = collection_snapshot
 
             # Get item info for logging and events

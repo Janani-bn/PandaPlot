@@ -150,3 +150,16 @@ def test_undo_after_redo_restores_state_at_redo_time():
     assert command.redo() is CommandResult.SUCCESS
     assert command.undo() is CommandResult.SUCCESS
     assert project.find_item("note").content == "edited"
+
+
+def test_undo_after_redo_restores_standalone_item_edited_before_redo():
+    ctx, _, project = _make_delete_setup()
+    note = Note(id="note", content="old")
+    project.add_item(note)
+    command = DeleteItemCommand(ctx, note.id, confirm=False)
+    assert command.execute() is CommandResult.SUCCESS
+    assert command.undo() is CommandResult.SUCCESS
+    project.find_item("note").content = "edited"
+    assert command.redo() is CommandResult.SUCCESS
+    assert command.undo() is CommandResult.SUCCESS
+    assert project.find_item("note").content == "edited"
