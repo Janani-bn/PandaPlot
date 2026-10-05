@@ -1540,3 +1540,23 @@ def test_availability_label_uses_theme_warning_color(app_context):
     panel._apply_theme()
 
     assert "#123456" in panel.fit_availability_label.styleSheet()
+
+
+def test_panel_refresh_does_not_crash_when_series_dataset_has_no_data(app_context):
+    from pandaplot.models.chart.chart_type import ChartType
+
+    dataset = Dataset(id="empty", name="empty")
+    dataset.data = None  # the constructor normalizes None to an empty frame; this state arises later
+    chart = Chart(id="line-chart", name="line chart", chart_type=ChartType.LINE)
+    series = chart.add_data_series(dataset_id=dataset.id, y_column_id="y")
+    series.x_column = "x"  # legacy name-only reference, resolves without reading dataset.data
+    project = Mock()
+    project.find_item = Mock(return_value=dataset)
+    project.get_all_items = Mock(return_value=[dataset])
+    panel = FitPanel(app_context)
+    panel.app_context.app_state = Mock()
+    panel.app_context.app_state.current_project = project
+
+    panel.load_chart_object(chart)
+
+    assert panel.fit_button.isEnabled() is False

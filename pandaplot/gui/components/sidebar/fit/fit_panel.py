@@ -613,7 +613,7 @@ class FitPanel(SidebarPanel):
                 return "This series has no X column for curve fitting. Select an XY series or choose Custom... with X and Y columns."
             return None
         dataset = self.current_project.find_item(series.dataset_id) if self.current_project else None
-        if not isinstance(dataset, Dataset):
+        if not isinstance(dataset, Dataset) or dataset.data is None:
             return None
         x_column = resolve_series_column(dataset, series.x_column_id, series.x_column)
         if not x_column or x_column not in dataset.data.columns:
