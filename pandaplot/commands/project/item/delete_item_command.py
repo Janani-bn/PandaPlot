@@ -101,6 +101,30 @@ class DeleteItemCommand(Command):
             self._snapshots = {}
             raise
 
+    def _descendant_removal_payloads(self, item: Item) -> list[dict[str, Any]]:
+        """PROJECT_ITEM_REMOVED payloads (without `project`) for every item
+        nested under `item`, deepest first. project.remove_item() drops the
+        whole subtree, so subscribers keyed on item_id (e.g. the tab closer)
+        must hear about each descendant, not only the collection."""
+        payloads: list[dict[str, Any]] = []
+        if isinstance(item, ItemCollection):
+            for child in item.get_items():
+                payloads.extend(self._descendant_removal_payloads(child))
+                payloads.append({
+                    "item_id": child.id,
+                    "item_type": type(child).__name__.lower(),
+                    "item_name": getattr(child, "name", child.id),
+                    "item_data": child.to_dict(),
+                })
+        return payloads
+
+    def _emit_removed_events(self, project, descendants: list[dict[str, Any]], payload: dict[str, Any]) -> None:
+        """Emit PROJECT_ITEM_REMOVED for each removed descendant, then for the
+        deleted item itself."""
+        for descendant in descendants:
+            self.app_state.event_bus.emit(ProjectEvents.PROJECT_ITEM_REMOVED, {"project": project, **descendant})
+        self.app_state.event_bus.emit(ProjectEvents.PROJECT_ITEM_REMOVED, {"project": project, **payload})
+
     def _emit_dependency_update_event(self, item: Item) -> None:
         event = item.dependency_update_event()
         if event is not None:
@@ -149,7 +173,7 @@ class DeleteItemCommand(Command):
             if self.confirm:
                 response = self.ui_controller.show_question(
                     "Delete Item",
-                    f"Are you sure you want to delete the {item_type} '{item_name}'?\nThis action cannot be undone."
+                    f"Are you sure you want to delete the {item_type} '{item_name}'?"
                 )
                 if not response:
                     return CommandResult.FAILURE
@@ -163,6 +187,7 @@ class DeleteItemCommand(Command):
             item_data = item.to_dict()
             collection_snapshot = deepcopy(item) if isinstance(item, ItemCollection) else None
             sibling_index = self._sibling_index(project, item)
+            descendants = self._descendant_removal_payloads(item)
             self._apply_dependency_cleanup(project, self._collect_ids_under(item))
 
             # Remove the item from the project
@@ -175,12 +200,11 @@ class DeleteItemCommand(Command):
             self.parent_item = parent_item
 
             # Emit event
-            self.app_state.event_bus.emit(ProjectEvents.PROJECT_ITEM_REMOVED, {
-                "project": project,
+            self._emit_removed_events(project, descendants, {
                 "item_id": self.item_id,
                 "item_type": item_type,
                 "item_name": item_name,
-                "item_data": self.deleted_item_data
+                "item_data": self.deleted_item_data,
             })
             self.logger.info(
                 "DeleteItemCommand: Deleted %s '%s' (id=%s)",
@@ -285,6 +309,7 @@ class DeleteItemCommand(Command):
             item_data = item.to_dict()
             collection_snapshot = deepcopy(item) if isinstance(item, ItemCollection) else None
             sibling_index = self._sibling_index(project, item)
+            descendants = self._descendant_removal_payloads(item)
 
             # Re-run the dependency cascade -- undo() put those references
             # back, so this recomputes fresh rather than assuming last
@@ -302,12 +327,11 @@ class DeleteItemCommand(Command):
             item_type = self.deleted_item_class.__name__.lower()
 
             # Emit event
-            self.app_state.event_bus.emit(ProjectEvents.PROJECT_ITEM_REMOVED, {
-                "project": project,
+            self._emit_removed_events(project, descendants, {
                 "item_id": self.item_id,
                 "item_type": item_type,
                 "item_name": item_name,
-                "item_data": self.deleted_item_data
+                "item_data": self.deleted_item_data,
             })
             self.logger.info(
                 "DeleteItemCommand: Redone deletion of %s '%s' (id=%s)",

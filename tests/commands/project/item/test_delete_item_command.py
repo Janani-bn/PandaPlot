@@ -169,7 +169,7 @@ class TestDeleteItemCommand:
         assert result is CommandResult.FAILURE
         ui_controller.show_question.assert_called_once_with(
             "Delete Item",
-            "Are you sure you want to delete the note 'Test Note'?\nThis action cannot be undone."
+            "Are you sure you want to delete the note 'Test Note'?"
         )
         sample_project.remove_item.assert_not_called()
 

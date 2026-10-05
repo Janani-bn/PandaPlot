@@ -6,6 +6,7 @@ import pytest
 from pandaplot.commands.base_command import CommandResult
 from pandaplot.commands.project.item import DeleteItemCommand
 from pandaplot.gui.controllers.ui_controller import UIController
+from pandaplot.models.events.event_types import ProjectEvents
 from pandaplot.models.project import Project
 from pandaplot.models.project.items import Chart, Dataset, Folder, Image, ImageGallery, Note
 from pandaplot.models.state import AppContext, AppState
@@ -211,3 +212,32 @@ def test_failed_remove_in_redo_restores_cascaded_dependents(monkeypatch):
     assert [s.dataset_id for s in chart.data_series] == ["data"]
     assert command.undo() is CommandResult.SUCCESS
     assert [s.dataset_id for s in chart.data_series] == ["data"]
+
+
+def _removed_ids(state):
+    return [
+        call.args[1]["item_id"]
+        for call in state.event_bus.emit.call_args_list
+        if call.args[0] == ProjectEvents.PROJECT_ITEM_REMOVED
+    ]
+
+
+def test_deleting_collection_emits_removed_event_for_every_descendant():
+    ctx, _, project = _make_delete_setup()
+    state = ctx.get_app_state()
+    folder = Folder(id="folder")
+    nested = Folder(id="nested")
+    project.add_item(folder)
+    project.add_item(Note(id="note"), folder.id)
+    project.add_item(nested, folder.id)
+    project.add_item(Note(id="deep"), nested.id)
+    command = DeleteItemCommand(ctx, folder.id, confirm=False)
+    assert command.execute() is CommandResult.SUCCESS
+    assert sorted(_removed_ids(state)) == ["deep", "folder", "nested", "note"]
+    assert _removed_ids(state)[-1] == "folder"
+    state.event_bus.emit.reset_mock()
+    assert command.undo() is CommandResult.SUCCESS
+    state.event_bus.emit.reset_mock()
+    assert command.redo() is CommandResult.SUCCESS
+    assert sorted(_removed_ids(state)) == ["deep", "folder", "nested", "note"]
+    assert _removed_ids(state)[-1] == "folder"
