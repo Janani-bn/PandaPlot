@@ -118,20 +118,12 @@ class DeleteItemCommand(Command):
                 )
                 return CommandResult.FAILURE
 
-            # Store the item's class type and serialized data for undo
-            self.deleted_item_class = type(item)
-            self.deleted_item_data = item.to_dict()
-            # to_dict omits child types and in-memory dataset/image payloads.
-            # Keep a detached subtree snapshot for collection undo instead.
-            self._deleted_collection = deepcopy(item) if isinstance(item, ItemCollection) else None
-
-            # Find the parent to store the relationship
-            if item.parent_id:
-                self.parent_item = project.find_item(item.parent_id)
+            item_class = type(item)
+            parent_item = project.find_item(item.parent_id) if item.parent_id else None
 
             # Get item name for user confirmation
             item_name = getattr(item, "name", self.item_id)
-            item_type = self.deleted_item_class.__name__.lower()
+            item_type = item_class.__name__.lower()
 
             # Confirm deletion (skipped when the caller already confirmed a
             # batch operation, e.g. bulk delete in the gallery tab)
@@ -146,10 +138,20 @@ class DeleteItemCommand(Command):
             # Cascade to any item referencing something this delete is
             # about to remove, before it actually disappears -- otherwise
             # those references silently dangle (see class docstring).
+            # to_dict omits child types and in-memory dataset/image payloads, so
+            # collections also keep a detached subtree snapshot for undo. Undo
+            # state is only stored once the delete has actually succeeded.
+            item_data = item.to_dict()
+            collection_snapshot = deepcopy(item) if isinstance(item, ItemCollection) else None
             self._apply_dependency_cleanup(project, self._collect_ids_under(item))
 
             # Remove the item from the project
             project.remove_item(item)
+
+            self.deleted_item_class = item_class
+            self.deleted_item_data = item_data
+            self._deleted_collection = collection_snapshot
+            self.parent_item = parent_item
 
             # Emit event
             self.app_state.event_bus.emit(ProjectEvents.PROJECT_ITEM_REMOVED, {
@@ -261,8 +263,13 @@ class DeleteItemCommand(Command):
             # time's result still applies.
             self._apply_dependency_cleanup(project, self._collect_ids_under(item))
 
+            # Re-snapshot the subtree as it is now, so a later undo restores
+            # the state at redo time rather than at the original delete.
+            collection_snapshot = deepcopy(item) if isinstance(item, ItemCollection) else None
+
             # Remove the item from the project
             project.remove_item(item)
+            self._deleted_collection = collection_snapshot
 
             # Get item info for logging and events
             item_name = getattr(item, "name", self.item_id)

@@ -73,3 +73,80 @@ def test_adding_populated_collection_indexes_descendants():
     project.add_item(folder)
     assert project.find_item("nested") is nested
     assert project.find_item("note") is note
+
+
+def test_add_item_rejects_descendant_id_collision_without_attaching():
+    project = Project("Test")
+    existing = Note(id="dup")
+    project.add_item(existing)
+    folder = Folder(id="folder")
+    folder.add_item(Note(id="dup"))
+    with pytest.raises(ValueError, match="dup"):
+        project.add_item(folder)
+    assert project.find_item("dup") is existing
+    assert project.find_item("folder") is None
+    assert folder not in project.root.get_items()
+
+
+def test_add_item_rejects_descendant_with_wrong_parent_reference():
+    project = Project("Test")
+    folder = Folder(id="folder")
+    note = Note(id="note")
+    folder.add_item(note)
+    note.parent_id = "elsewhere"
+    with pytest.raises(ValueError, match="note"):
+        project.add_item(folder)
+    assert project.find_item("folder") is None
+    assert project.find_item("note") is None
+
+
+def _make_delete_setup():
+    ctx = Mock(spec=AppContext)
+    state = Mock(spec=AppState)
+    ctx.get_app_state.return_value = state
+    ui = Mock(spec=UIController)
+    ctx.get_ui_controller.return_value = ui
+    ctx.event_bus = Mock()
+    state.event_bus = Mock()
+    project = Project("Test")
+    state.has_project = True
+    state.current_project = project
+    return ctx, ui, project
+
+
+def test_declined_confirmation_retains_no_snapshot():
+    ctx, ui, project = _make_delete_setup()
+    ui.show_question.return_value = False
+    folder = Folder(id="folder")
+    project.add_item(folder)
+    command = DeleteItemCommand(ctx, folder.id)
+    assert command.execute() is CommandResult.FAILURE
+    assert command._deleted_collection is None
+    assert command.deleted_item_data is None
+    assert project.find_item("folder") is folder
+
+
+def test_failed_remove_retains_no_snapshot(monkeypatch):
+    ctx, _, project = _make_delete_setup()
+    folder = Folder(id="folder")
+    project.add_item(folder)
+    monkeypatch.setattr(project, "remove_item", Mock(side_effect=RuntimeError("boom")))
+    command = DeleteItemCommand(ctx, folder.id, confirm=False)
+    assert command.execute() is CommandResult.FAILURE
+    assert command._deleted_collection is None
+    assert command.deleted_item_data is None
+
+
+def test_undo_after_redo_restores_state_at_redo_time():
+    ctx, _, project = _make_delete_setup()
+    folder = Folder(id="folder")
+    note = Note(id="note", content="old")
+    project.add_item(folder)
+    project.add_item(note, folder.id)
+    command = DeleteItemCommand(ctx, folder.id, confirm=False)
+    assert command.execute() is CommandResult.SUCCESS
+    assert command.undo() is CommandResult.SUCCESS
+    project.find_item("note").content = "edited"
+    assert command.redo() is CommandResult.SUCCESS
+    assert command.undo() is CommandResult.SUCCESS
+    assert project.find_item("note").content == "edited"

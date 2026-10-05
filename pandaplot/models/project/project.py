@@ -42,7 +42,15 @@ class Project:
 
         `index`, when given, inserts the item at that position among its new
         siblings instead of appending it (see ItemCollection.add_item()).
+
+        Raises:
+            ValueError: If the item's subtree reuses an id already in the
+                project (held by a different item; the added item itself may still
+                overwrite one) or within the subtree, or
+                a descendant's parent_id does not match its container. The
+                project is left unchanged.
         """
+        self._validate_subtree(item)
         if parent_id is None:
             # Add to root
             self.root.add_item(item, index=index)
@@ -59,6 +67,27 @@ class Project:
 
         # Index the full subtree when restoring or attaching a collection.
         self._index_item_subtree(item)
+
+    def _validate_subtree(self, item: Item) -> None:
+        """Check that indexing `item`'s subtree cannot clobber other items or
+        record inconsistent parent references."""
+        seen: set[str] = set()
+        stack: list[Item] = [item]
+        while stack:
+            current = stack.pop()
+            if current.id in seen:
+                raise ValueError(f"Duplicate item id '{current.id}' within the added subtree")
+            seen.add(current.id)
+            existing = self.items_index.get(current.id)
+            # The added item itself keeps the long-standing overwrite behaviour
+            # for a duplicate id; only descendants must not clobber other items.
+            if current is not item and existing is not None and existing is not current:
+                raise ValueError(f"Item id '{current.id}' is already used by another item in the project")
+            if isinstance(current, ItemCollection):
+                for child in current.get_items():
+                    if child.parent_id != current.id:
+                        raise ValueError(f"Item '{child.id}' has parent_id '{child.parent_id}', expected '{current.id}'")
+                    stack.append(child)
 
     def _index_item_subtree(self, item: Item) -> None:
         self.items_index[item.id] = item
