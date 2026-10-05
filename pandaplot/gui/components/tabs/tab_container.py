@@ -286,7 +286,6 @@ class TabContainer(PWidget):
         # Popped-out tabs live in their own window; close it without re-docking.
         if item_id in self.floating_windows:
             # Check the hosted tab before removing it from either registry.
-            content = self.tabs.get(item_id)
             if user_initiated and not self.can_close_floating_tab(item_id):
                 return
             window = self.floating_windows.pop(item_id)
@@ -346,8 +345,6 @@ class TabContainer(PWidget):
 
         window = FloatingTabWindow(self.app_context, item_id, widget, title)
         window.redock_requested.connect(self.redock_tab)
-        window.close_guard = self.can_close_floating_tab
-        window.close_requested.connect(lambda closed_id: self.close_tab_by_item_id(closed_id, user_initiated=False))
         self.floating_windows[item_id] = window
         window.show()
         window.raise_()
