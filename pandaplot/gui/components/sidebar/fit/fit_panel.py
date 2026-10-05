@@ -145,6 +145,9 @@ class FitPanel(SidebarPanel):
             f"color: {base_fg}; padding: 5px; border: 1px solid {card_border};"
         )
 
+        warning_fg = tokens.get("status_modified_text", "#B06A00")
+        self.fit_availability_label.setStyleSheet(f"color: {warning_fg};")
+
         self.update_data_points_display()
 
     def _apply_menu_styling(self):
@@ -229,7 +232,6 @@ class FitPanel(SidebarPanel):
         data_layout.addLayout(points_layout, 2, 1)
         self.fit_availability_label = QLabel()
         self.fit_availability_label.setWordWrap(True)
-        self.fit_availability_label.setStyleSheet("color: #b45309;")
         self.fit_availability_label.setVisible(False)
         data_layout.addWidget(self.fit_availability_label, 3, 0, 1, 2)
 

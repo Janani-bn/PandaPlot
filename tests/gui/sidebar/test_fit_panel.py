@@ -1529,3 +1529,14 @@ def test_switching_to_unsupported_chart_clears_stale_points_and_range_warning(ap
     assert panel.range_max_value_label.text() == "—"
     assert panel.range_warning_label.isHidden() is True
     assert panel.data_points_warning_icon.isHidden() is True
+
+
+def test_availability_label_uses_theme_warning_color(app_context):
+    app_context.get_manager.return_value.get_design_tokens.return_value = {
+        "font_size_group_title": 9,
+        "status_modified_text": "#123456",
+    }
+    panel = FitPanel(app_context)
+    panel._apply_theme()
+
+    assert "#123456" in panel.fit_availability_label.styleSheet()
