@@ -43,11 +43,11 @@ On first launch, PandaPlot initializes with a clean workspace displaying the Wel
 
 ### Your First Project
 
-1. Click **New Project** on the Welcome tab or select **File > New Project** (`Ctrl+N`).
+1. Click **New Project** on the Welcome tab or select **File > New**.
 2. Provide a name for your project.
-3. Import a dataset via **File > Import CSV...** or **File > Import Excel...**.
+3. Import a dataset via **Data > Import Data...**.
 4. Double-click the imported dataset in the **Project View** panel to open it in a tabular spreadsheet view.
-5. Save your project using **File > Save Project** (`Ctrl+S`).
+5. Save your project using **File > Save** (`Ctrl+S`).
 
 ---
 
@@ -76,7 +76,7 @@ PandaPlot features a modern, intuitive PySide6 desktop interface divided into th
 - **Edit**: Undo (`Ctrl+Z`), Redo (`Ctrl+Y`), and project editing operations.
 - **View**: Toggle sidebar visibility, switch theme (Light/Dark), zoom, and layout options.
 - **Tools**: Access mathematical analysis, curve fitting, signal analysis, and formula transformation tools.
-- **Help**: Access user documentation, keyboard shortcut reference, and about dialog.
+- **Help**: Open the Welcome tab, examples, and About information.
 
 ### Collapsible Sidebar
 Located on the left, the sidebar uses icon tabs to switch contextual control panels:
@@ -115,7 +115,7 @@ A `.pplot` file is a ZIP archive containing structured JSON and Parquet metadata
 ### Organizing Items
 - **Creating Folders**: Click the **New Folder** button in the Project View toolbar or right-click to add nested subfolders.
 - **Renaming Items**: Select an item in the Project View and press `F2`, or right-click and select **Rename**.
-- **Deleting Items**: Select an item and press `Delete`, or right-click and select **Delete**. All item deletions are fully undoable (`Ctrl+Z`).
+- **Deleting Items**: Right-click an item and select **Delete**. All item deletions are fully undoable (`Ctrl+Z`).
 
 ### Auto-Save & Session Recovery
 PandaPlot supports optional auto-saving and automatic session state preservation across restarts. If enabled in Settings, project changes are automatically flushed to disk upon major operations.
@@ -128,12 +128,12 @@ PandaPlot supports optional auto-saving and automatic session state preservation
 PandaPlot supports multiple data formats:
 
 1. **CSV Import**:
-   - Navigate to **File > Import CSV...** (`Ctrl+I`).
+   - Navigate to **Data > Import Data...**.
    - Select CSV parameters (delimiter, header row, encoding) in the preview dialog.
    - Click **Import** to generate a new Dataset item in the project.
 
 2. **Excel Multi-Sheet Import Wizard**:
-   - Select **File > Import Excel...**.
+   - Select **Data > Import Data...**.
    - Browse worksheets, select individual or multiple sheets to import simultaneously.
    - Preview column names, types, and sheet contents before completing import.
 
@@ -145,7 +145,7 @@ Double-clicking a Dataset opens the spreadsheet view powered by `QTableView`:
 - **Data Types (dtypes)**: Convert columns between integer, floating-point, text, and datetime types via right-click column header context menus.
 
 ### Exporting Data
-Datasets can be exported at any time via **File > Export Dataset...** to standard `.csv` files or Microsoft Excel `.xlsx` workbooks.
+To export a dataset, open it in the Dataset tab and click **Export Data**.
 
 ---
 
@@ -275,10 +275,7 @@ User preferences are stored in `~/.pandaplot/config.json`:
 
 1. **Non-Destructive Workflows**: Analysis operations (derivatives, smoothing, transforms) never overwrite input data unless explicitly requested; they create new columns for easy comparison.
 2. **Keyboard Shortcuts**:
-   - `Ctrl+N`: New Project
-   - `Ctrl+O`: Open Project
-   - `Ctrl+S`: Save Project
-   - `Ctrl+I`: Import CSV
+   - `Ctrl+S`: Save
    - `Ctrl+Z`: Undo last action
    - `Ctrl+Y`: Redo last action
    - `F2`: Rename selected item
@@ -303,7 +300,7 @@ User preferences are stored in `~/.pandaplot/config.json`:
    - *Solution*: Open Chart Properties and verify that the active series maps to valid dataset columns.
 
 ### Getting Help
-1. **Built-in Help**: Access keyboard shortcut guides from **Help > Shortcuts**.
+1. **Built-in Help**: Access keyboard shortcut guides from the shortcuts listed in this guide.
 2. **Tooltips**: Hover over control panel inputs and toolbar buttons for brief usage context.
 3. **Documentation**: Refer to `docs/ARCHITECTURE.md` and `docs/USER_GUIDE.md` in the source repository.
 4. **Examples**: Explore sample files provided in the `examples/` directory.
