@@ -105,12 +105,10 @@ Displays contextual messages, current operation status, background task progress
 PandaPlot organizes all working assets into self-contained project files (`.pplot`).
 
 ### Project Hierarchy & File Format
-A `.pplot` file is a ZIP archive containing structured JSON and Parquet metadata:
-- `project.json`: Defines item hierarchy, UUID relationships, and folder organization.
-- `dataset_{id}.parquet`: High-performance binary storage for dataset DataFrames preserving exact data types.
-- `chart_{id}.json`: Serialization of chart parameters, styling, data series references, and fit parameters.
-- `note_{id}.json`: Markdown text and tag metadata.
-- `folder_{id}.json`: Folder organization metadata.
+A `.pplot` file is a ZIP archive containing a project index and files for its items:
+- `project.json`: Defines item hierarchy, item types, and paths to item files.
+- Dataset items store their tabular data as CSV and metadata as JSON. Metadata includes column IDs, roles, and dtype information used to restore types on load.
+- Chart, note, and folder items store their data and settings as JSON files.
 
 ### Organizing Items
 - **Creating Folders**: Click the **New Folder** button in the Project View toolbar or right-click to add nested subfolders.
@@ -160,13 +158,26 @@ To create a plot from any dataset:
    - Mapping X and Y axes columns from available datasets.
    - Setting initial plot title and axis labels.
 
-### Supported Chart Types
-- **Line Plot**: Visualizes continuous series data over time or continuous variables.
-- **Scatter Plot**: Displays individual data points for correlation analysis.
-- **Bar Chart**: Shows categorical value comparisons.
-- **Histogram**: Visualizes probability distributions and data frequency.
-- **Box Plot**: Summarizes five-number statistical distributions (median, quartiles, outliers).
-- **Violin Plot**: Displays kernel density estimations along with box plot statistical metrics.
+### Supported Series Types
+Charts can contain these series types, depending on the chart and selected data:
+- **Line**: Connects values in order.
+- **Scatter**: Shows individual data points.
+- **Bar**: Compares values with bars.
+- **Stacked Bar**: Stacks bar values at each X position.
+- **Histogram**: Shows the frequency distribution of one values column.
+- **Density**: Shows a kernel density estimate for one values column.
+- **Box**: Summarizes a distribution with quartiles, median, and outliers.
+- **Pie**: Shows values as wedges, with optional category labels.
+- **Vector**: Shows two-dimensional vector fields.
+- **Color Map**: Colors points by a third data column.
+- **Heatmap**: Displays values on a two-dimensional grid.
+- **3D Scatter**: Plots data points in three dimensions.
+- **3D Line**: Connects data points in three dimensions.
+- **3D Surface**: Shows a surface in three dimensions.
+- **3D Wireframe**: Shows a wireframe in three dimensions.
+- **3D Bar**: Shows values as three-dimensional bars.
+- **3D Triangulated Surface**: Shows a triangulated surface in three dimensions.
+- **3D Vector**: Shows a three-dimensional vector field.
 
 ### Plot Customization & Styling
 Open the **Chart Properties** sidebar panel while viewing a plot tab to adjust:
@@ -245,11 +256,7 @@ The output has one row per controlled-value group and measured variable, with th
 The **Transform Panel** allows creation of derived columns using mathematical formulas evaluated across dataset columns.
 
 ### Formula Evaluator
-Transformations use safe vectorized evaluation via `pandas.eval`:
-- Reference existing columns by name: `Velocity = df['Distance'] / df['Time']`
-- Supported mathematical operators: `+`, `-`, `*`, `/`, `**` (exponentiation), `%` (modulo)
-- Supported functions: `sin`, `cos`, `tan`, `exp`, `log`, `sqrt`, `abs`
-- Column transformations append new columns or replace existing columns in place with full Undo/Redo support.
+For a column transformation, select a source column and write a Python expression using `x` for that column's values. For example, use `np.sqrt(x)` for square roots, `x.rolling(3).mean()` for a rolling average over three rows, or `pd.to_datetime(x)` to convert values to dates. The Transform panel supplies selected NumPy and pandas names for expressions; this is not a general-purpose Python interface. Column transformations can append a new column or replace the selected column, with Undo/Redo support.
 
 ---
 
