@@ -15,6 +15,13 @@ def app_context(tmp_path, monkeypatch):
     return build_app_context()
 
 
+def test_executor_starts_with_configured_undo_limit(app_context):
+    config_manager = app_context.get_manager(ConfigManager)
+    executor = app_context.get_command_executor()
+
+    assert executor.max_undo_levels == config_manager.config.max_undo_levels == 10
+
+
 def test_config_update_changes_executor_undo_limit(app_context):
     config_manager = app_context.get_manager(ConfigManager)
     executor = app_context.get_command_executor()

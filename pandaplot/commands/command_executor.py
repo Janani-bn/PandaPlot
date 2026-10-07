@@ -261,10 +261,15 @@ class CommandExecutor:
     
     def set_max_undo_levels(self, max_undo_levels: int) -> None:
         """Set the undo limit and clean up evicted commands."""
-        self.max_undo_levels = max(1, max_undo_levels)
-        while len(self.undo_stack) > self.max_undo_levels:
+        max_undo_levels = max(1, max_undo_levels)
+        if max_undo_levels == self.max_undo_levels:
+            return
+        self.max_undo_levels = max_undo_levels
+        trimmed = len(self.undo_stack) > max_undo_levels
+        while len(self.undo_stack) > max_undo_levels:
             self._safe_cleanup(self.undo_stack.pop(0))
-        self._notify_history_changed()
+        if trimmed:
+            self._notify_history_changed()
 
     def can_undo(self) -> bool:
         """Check if undo is available."""

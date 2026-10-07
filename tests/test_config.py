@@ -9,7 +9,6 @@ These tests focus purely on the data model behavior implemented in
     * Reset & cloning
     * Robustness against malformed / unknown input
 """
-
 from __future__ import annotations
 
 import pytest

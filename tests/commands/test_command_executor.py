@@ -72,6 +72,19 @@ class TestCommandExecutor:
         assert commands[1].cleanup_count == 1
         assert len(history_changes) >= 5
 
+    def test_set_max_undo_levels_without_eviction_does_not_notify(self):
+        history_changes = []
+        executor = CommandExecutor(on_history_changed=lambda: history_changes.append(True))
+        executor.execute_command(MockCommand("Command0"))
+        history_changes.clear()
+
+        executor.set_max_undo_levels(10)
+        executor.set_max_undo_levels(10)
+        executor.set_max_undo_levels(5)
+
+        assert executor.max_undo_levels == 5
+        assert history_changes == []
+
     def test_redo_after_lowering_limit_keeps_cap(self):
         executor = CommandExecutor()
         commands = [MockCommand(f"Command{i}") for i in range(4)]
