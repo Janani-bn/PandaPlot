@@ -83,13 +83,6 @@ def test_unknown_sections_and_keys_are_ignored():
     )
     # Ensure nothing exploded and theme accepted
     assert cfg.appearance.theme == Theme.SYSTEM
-
-
-def test_reset_defaults_restores_max_undo_levels():
-    cfg = ApplicationConfig.default()
-    cfg.update_from_mapping({"max_undo_levels": 50})
-    cfg.reset_defaults()
-    assert cfg.max_undo_levels == 10
     # Ensure no accidental attribute created
     assert not hasattr(cfg.appearance, "non_key")
 
@@ -109,6 +102,13 @@ def test_reset_defaults_restores_values():
     cfg.reset_defaults()
     assert cfg.editor.tab_size == 4
     assert cfg.appearance.theme == Theme.SYSTEM
+
+
+def test_reset_defaults_restores_max_undo_levels():
+    cfg = ApplicationConfig.default()
+    cfg.update_from_mapping({"max_undo_levels": 50})
+    cfg.reset_defaults()
+    assert cfg.max_undo_levels == 10
 
 
 def test_clone_is_deep_copy():
