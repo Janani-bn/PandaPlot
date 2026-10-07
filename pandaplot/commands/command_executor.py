@@ -247,6 +247,8 @@ class CommandExecutor:
             return False
 
         self.undo_stack.append(command)
+        while len(self.undo_stack) > self.max_undo_levels:
+            self._safe_cleanup(self.undo_stack.pop(0))
         if result is CommandResult.FAILURE:
             self.logger.warning("Command redo reported failure: %s", command_name)
         elif result is CommandResult.NOOP:

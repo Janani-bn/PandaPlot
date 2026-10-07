@@ -377,6 +377,7 @@ class ApplicationConfig:
 		self.editor = fresh.editor
 		self.project = fresh.project
 		self.chart_display = fresh.chart_display
+		self.max_undo_levels = fresh.max_undo_levels
 
 
 # Public export surface

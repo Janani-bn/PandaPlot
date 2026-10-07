@@ -102,6 +102,7 @@ def build_app_context() -> AppContext:
         on_undo_redo_error=_warn_undo_redo_error,
         max_undo_levels=config_manager.config.max_undo_levels,
     )
+
     def _update_undo_limit(event_data: dict) -> None:
         config = event_data.get("config")
         if config is not None:
