@@ -1328,3 +1328,16 @@ def test_add_fit_series_refuses_chart_types_that_dont_allow_fits(chart_type):
     with pytest.raises(ValueError, match="Fits aren't available"):
         chart.add_fit_series("ds", x_data=np.array([1.0]), y_data=np.array([1.0]), label="F", style=FitStyle())
     assert chart.data_series == []
+
+
+def test_fill_sections_round_trip_through_chart_serialization():
+    from pandaplot.models.chart.series_style import LineSeriesStyle
+
+    chart = Chart(name="fill sections", chart_type="line")
+    chart.add_data_series("dataset", x_column="x", y_column="y", style=LineSeriesStyle(
+        fill_enabled=True, fill_range_enabled=True, fill_sections=[(1, 3), (6, -1)],
+    ))
+
+    restored = Chart.from_dict(chart.to_dict())
+
+    assert restored.data_series[0].style.fill_sections == [(1, 3), (6, -1)]

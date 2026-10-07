@@ -144,6 +144,8 @@ def _series_style_from_dict(series_type: SeriesType, style_dict: dict[str, Any])
         style_dict["confidence_lower"] = np.array(style_dict["confidence_lower"])
     if style_dict.get("confidence_upper") is not None:
         style_dict["confidence_upper"] = np.array(style_dict["confidence_upper"])
+    if "fill_sections" in style_dict:
+        style_dict["fill_sections"] = [tuple(section) for section in style_dict["fill_sections"]]
     return SERIES_TYPE_SPECS[series_type].style_cls(**style_dict)
 
 
@@ -262,7 +264,7 @@ class Chart(Item):
             "value_label_bg_color", "value_label_bg_alpha",
             # Area fill: Line/Scatter share the full FillStyleFields set.
             "fill_enabled", "fill_color", "fill_alpha", "fill_orientation", "fill_base",
-            "fill_to_index", "fill_range_enabled", "fill_range_start", "fill_range_end",
+            "fill_to_index", "fill_range_enabled", "fill_sections",
             # Density <-> Line share the curve's line style and width.
             "line_style", "line_width",
         ):
