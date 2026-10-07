@@ -75,14 +75,14 @@ class ProjectTreeWidget(QTreeWidget):
                 target_type = target_data.get("type", "")
 
                 # If dropping on a folder, make it the parent
-                if target_type in ["folder", "imagegallery"]:
+                if target_type in ["folder", "imagegallery"] and not self._is_beside_drop(target_item, event):
                     new_parent_id = target_data.get("id", "root")
                     self.logger.debug(
                         "ProjectTreeWidget: dropping on folder new_parent_id=%s", new_parent_id)
                 # If dropping on another item, use its parent folder
-                elif target_type in ["note", "dataset", "chart", "image"]:
+                elif target_type in ["note", "dataset", "chart", "image", "folder", "imagegallery"]:
                     target_item_obj = target_data.get("data")
-                    if target_item_obj and target_item_obj.parent_id:
+                    if target_item_obj is not None and target_item_obj.parent_id:
                         # Check if the parent_id is the root collection ID
                         project = self.parent_panel.app_state.current_project
                         if project and target_item_obj.parent_id == project.root.id:
@@ -103,7 +103,7 @@ class ProjectTreeWidget(QTreeWidget):
 
         # Get current parent folder ID
         current_item_obj = source_data.get("data")
-        if current_item_obj:
+        if current_item_obj is not None:
             # Check if the parent_id is the root collection ID
             project = self.parent_panel.app_state.current_project
             if project and current_item_obj.parent_id == project.root.id:
@@ -146,6 +146,17 @@ class ProjectTreeWidget(QTreeWidget):
         # Also set a timer to clear drag state in case events are out of order
         QTimer.singleShot(100, lambda: setattr(self, "_is_dragging", False))
 
+    def _is_beside_drop(self, item, event):
+        """A drop at a row edge targets its parent; the center targets the folder.
+
+        Use the same geometry for feedback and execution. This widget handles
+        dragMoveEvent itself, so Qt's default drop indicator is not updated.
+        """
+        rectangle = self.visualItemRect(item)
+        margin = min(4, max(1, rectangle.height() // 4))
+        y = event.position().toPoint().y()
+        return y < rectangle.top() + margin or y > rectangle.bottom() - margin
+
     def dragMoveEvent(self, event):
         """Handle drag move events with visual feedback."""
         try:
@@ -170,7 +181,7 @@ class ProjectTreeWidget(QTreeWidget):
                         if target_type in ["folder", "project", "note", "dataset", "chart", "imagegallery", "image"]:
                             # Only highlight folders and project root for "drop into" operations
                             # For other items, provide subtle feedback since it's a "drop beside" operation
-                            if target_type in ["folder", "project", "imagegallery"]:
+                            if target_type == "project" or (target_type in ["folder", "imagegallery"] and not self._is_beside_drop(target_item, event)):
                                 self._highlight_item(target_item)
                                 if target_type in ("folder", "imagegallery"):
                                     self.setToolTip("Drop into folder")
