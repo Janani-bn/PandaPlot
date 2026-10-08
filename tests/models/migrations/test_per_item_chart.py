@@ -682,6 +682,8 @@ def test_migrate_chart_v3_to_v4_moves_single_fill_range_into_sections():
         {"series_type": "line", "style": {"fill_range_enabled": True, "fill_range_start": 2, "fill_range_end": -1}},
         {"series_type": "scatter", "style": {"fill_range_enabled": False, "fill_range_start": 0, "fill_range_end": 3}},
         {"series_type": "line", "style": {"fill_enabled": True}},
+        {"series_type": "fit", "style": None},
+        {"series_type": "hist"},
     ]}
 
     migrated = migrate_chart_v3_to_v4(raw)
@@ -690,6 +692,8 @@ def test_migrate_chart_v3_to_v4_moves_single_fill_range_into_sections():
         {"series_type": "line", "style": {"fill_range_enabled": True, "fill_sections": [(2, -1)]}},
         {"series_type": "scatter", "style": {"fill_range_enabled": False, "fill_sections": [(0, 3)]}},
         {"series_type": "line", "style": {"fill_enabled": True}},
+        {"series_type": "fit", "style": None},
+        {"series_type": "hist"},
     ]
     assert raw["data_series"][0]["style"]["fill_range_start"] == 2
 

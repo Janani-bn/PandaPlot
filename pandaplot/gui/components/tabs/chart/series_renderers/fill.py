@@ -6,7 +6,20 @@ from pandaplot.models.chart.series_style.fill import FillStyleFields
 
 
 def fill_range_mask(style: FillStyleFields, point_count: int) -> np.ndarray:
-    """Return the union of the style's inclusive point ranges."""
+    """Build a boolean mask covering the union of the configured point ranges.
+
+    The ranges use inclusive, zero-based point indexes. Out-of-bounds indexes
+    are clamped to the available points, reversed ranges are ignored, and
+    touching or overlapping ranges are coalesced. An empty section list means
+    the whole series.
+
+    Args:
+        style: Fill style with the configured point sections.
+        point_count: Number of data points in the series.
+
+    Returns:
+        Boolean array with one entry per point, true for points in a section.
+    """
     mask = np.zeros(point_count, dtype=bool)
     if not style.fill_sections:
         mask[:] = True

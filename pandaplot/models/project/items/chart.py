@@ -269,7 +269,10 @@ class Chart(Item):
             "line_style", "line_width",
         ):
             if hasattr(old_style, field_name) and hasattr(new_style, field_name):
-                setattr(new_style, field_name, getattr(old_style, field_name))
+                value = getattr(old_style, field_name)
+                if field_name == "fill_sections":
+                    value = list(value)
+                setattr(new_style, field_name, value)
         # Sibling boxes share one set of numbered X slots and named ticks on
         # the primary axes, so a Box series can never sit on Y2 -- and the
         # UI offers no way to move it back once retyped.

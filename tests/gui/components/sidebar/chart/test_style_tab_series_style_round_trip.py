@@ -159,7 +159,8 @@ def test_fill_range_defaults_to_disabled_and_whole_series():
     tab.apply_series_style_to(series)
 
     assert series.style.fill_range_enabled is False
-    assert series.style.fill_sections == [(0, -1)]
+    assert series.style.fill_sections == []
+    assert tab.fill_section_rows == []
 
 
 def test_disabling_range_preserves_configured_sections():
@@ -175,19 +176,24 @@ def test_disabling_range_preserves_configured_sections():
 
 def test_add_and_remove_fill_section_controls_update_rows_and_style():
     tab, series = _tab_with_project_series(rows=7, fill_range_enabled=True, fill_sections=[(1, 3)])
-    tab.load_series_style(series)
+    tab.set_selected("series", series)
 
+    changes = []
+    tab.configChanged.connect(lambda: changes.append(True))
     tab.fill_add_section_button.click()
     assert len(tab.fill_section_rows) == 2
     _, start_spin, _, end_spin, _ = tab.fill_section_rows[1]
     assert (start_spin.value(), end_spin.value()) == (1, 7)
+    assert series.style.fill_sections == [(1, 3), (0, -1)]
+    assert changes
     tab.fill_section_rows[1][0].findChild(PButton).click()
     assert len(tab.fill_section_rows) == 1
     assert tab.fill_section_rows[0][0].findChild(QLabel).text() == "Section 1"
 
     tab.fill_section_rows[0][0].findChild(PButton).click()
-    tab.apply_series_style_to(series)
     assert series.style.fill_sections == []
+    tab.set_selected("series", series)
+    assert tab.fill_section_rows == []
 
 
 def test_load_then_apply_round_trips_vector_series():
@@ -610,10 +616,14 @@ def _tab_with_project_series(rows: int, **style_overrides):
     return tab, series
 
 
-def test_fill_range_points_default_to_first_and_last_data_point():
+def test_fill_range_defaults_to_empty_then_added_section_uses_full_data_range():
     tab, series = _tab_with_project_series(rows=7)
 
-    tab.load_series_style(series)
+    tab.set_selected("series", series)
+
+    assert tab.fill_section_rows == []
+    tab.fill_range_enabled_toggle.setChecked(checked=True)
+    tab.fill_add_section_button.click()
 
     assert len(tab.fill_section_rows) == 1
     _, start_spin, start_label, end_spin, end_label = tab.fill_section_rows[0]

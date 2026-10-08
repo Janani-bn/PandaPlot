@@ -270,12 +270,13 @@ def migrate_chart_v3_to_v4(raw: dict) -> dict:
     migrated_series = []
     for series in raw.get("data_series", []):
         new_series = dict(series)
-        style = dict(new_series.get("style") or {})
-        if "fill_range_start" in style or "fill_range_end" in style:
+        style = new_series.get("style")
+        if isinstance(style, dict) and ("fill_range_start" in style or "fill_range_end" in style):
+            style = dict(style)
             start = style.pop("fill_range_start", 0)
             end = style.pop("fill_range_end", -1)
             style["fill_sections"] = [(start, end)]
-        new_series["style"] = style
+            new_series["style"] = style
         migrated_series.append(new_series)
     new_raw["data_series"] = migrated_series
     return new_raw

@@ -638,6 +638,23 @@ class TestRetypeSeries:
         assert series.style.error_bars.y_error_column_id == "err-col"
         assert series.style.error_bars.error_cap_size == 7.0
 
+    def test_retyping_line_to_scatter_copies_fill_sections_without_aliasing(self):
+        chart = Chart(name="C", chart_type="line")
+        chart.add_data_series(
+            dataset_id="ds1", x_column_id="x", y_column_id="y",
+            style=LineSeriesStyle(fill_range_enabled=True, fill_sections=[(1, 3), (6, -1)]),
+        )
+        old_style = chart.data_series[0].style
+        old_sections = old_style.fill_sections
+
+        chart.retype_series(0, "scatter")
+
+        new_sections = chart.data_series[0].style.fill_sections
+        assert new_sections == [(1, 3), (6, -1)]
+        assert new_sections is not old_sections
+        new_sections.append((8, 9))
+        assert old_sections == [(1, 3), (6, -1)]
+
     def test_retyping_line_to_scatter_carries_over_value_label_settings(self):
         """Regression test: a Line series' value-label configuration (#125)
         must survive a retype to Scatter -- both style classes declare the

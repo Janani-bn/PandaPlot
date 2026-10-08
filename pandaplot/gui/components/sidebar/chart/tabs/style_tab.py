@@ -1894,9 +1894,11 @@ class StyleTab(QWidget):
         end_spin.valueChanged.connect(self._on_fill_range_changed)
         self._update_fill_range_labels()
         self._update_fill_controls_visibility()
+        if not self._updating_controls:
+            self._on_field_changed()
 
     def _remove_fill_section(self, row_widget: QWidget) -> None:
-        """Remove a section; the last row can be removed to mean whole series."""
+        """Remove a section; no rows means an unrestricted whole-series fill."""
         self.fill_sections_layout.removeWidget(row_widget)
         row_widget.hide()
         row_widget.deleteLater()
@@ -1908,11 +1910,27 @@ class StyleTab(QWidget):
         self._update_fill_controls_visibility()
         self._on_field_changed()
 
-    def _on_fill_range_changed(self, _value: int):
+    def _on_fill_range_changed(self, _value: int) -> None:
+        """Refresh endpoint readouts and apply the edited section ranges.
+
+        Args:
+            _value: New spin-box value emitted by Qt.
+
+        Returns:
+            None.
+        """
         self._update_fill_range_labels()
         self._on_field_changed()
 
-    def _resolve_fill_points(self, series) -> tuple | None:
+    def _resolve_fill_points(self, series: DataSeries) -> tuple[np.ndarray, np.ndarray] | None:
+        """Resolve a series' plotted coordinates for fill-section readouts.
+
+        Args:
+            series: Series whose x and y point coordinates should be read.
+
+        Returns:
+            A pair of NumPy arrays, or None if the project data is unavailable.
+        """
         from pandaplot.gui.components.tabs.chart.chart_editor import resolve_series_data
         app_state = self.app_context.get_app_state() if self.app_context else None
         project = app_state.current_project if app_state is not None and app_state.has_project else None
@@ -2419,7 +2437,7 @@ class StyleTab(QWidget):
                 row_widget.deleteLater()
             self.fill_section_rows.clear()
             sections = getattr(style, "fill_sections", [])
-            for start, end in sections or [(0, -1)]:
+            for start, end in sections:
                 self._add_fill_section(start + 1, point_count if end < 0 else end + 1)
             self._update_fill_range_labels()
             self._update_fill_controls_visibility()
