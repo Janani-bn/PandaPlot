@@ -1,34 +1,49 @@
 # Keyboard focus and accessible controls
 
-Status: proposal for review, not an implemented accessibility fix.
+Status: plan for review. The `ToggleSwitch` keyboard base is already
+implemented; the remaining items below are not.
 
 Related: [#339](https://github.com/Youth-Research-Center/PandaPlot/issues/339).
-This document addresses the request for an app-wide approach before changing
-ToggleSwitch. It does not close #339 or claim screen-reader validation.
+This document sets the app-wide approach for keyboard focus and accessible
+controls. It does not close #339 or claim screen-reader validation.
 
-## Current gaps
+## Current state
 
-The audit uses main at `22e9158` (September 30, 2026).
+Snapshot of `main` at `a38f2774` (October 3, 2026). Trim or update this
+section as the follow-ups below land; the rest of the document is the plan.
 
-- `gui/components/common/toggle_switch.py` paints a bare QWidget. It has no
-  focus policy or key handler and stores checked state separately from Qt's
-  button model. Existing tests only check knob coordinates.
+Already in place:
+
+- `gui/components/common/toggle_switch.py` is a checkable `QAbstractButton`
+  with `StrongFocus`, a painted focus ring, Space and Enter/Return activation,
+  and `toggled(bool)` driven by Qt's own checked state. An offscreen check
+  reports `Role.CheckBox` and checkable state.
+  `tests/gui/components/common/test_toggle_switch.py` covers focus, keyboard
+  activation, accessible state and `toggled` emission.
 - `PButton` inherits QPushButton and already has Qt button behavior. Focus
   support should be preserved rather than replaced with app-wide key routing.
+
+Still open:
+
+- Nearly all of the 35 `ToggleSwitch` uses have no accessible name
+  (`density_fill_toggle` in `style_tab.py` is a rare exception), so a screen
+  reader announces an unnamed check box.
+- `ToggleSwitch` handles Enter/Return itself. Native check boxes do not toggle
+  on Enter, and Qt forwards Enter to a dialog's default button, so pressing
+  Enter on a switch in a dialog flips it instead of accepting. See
+  [Shared ToggleSwitch](#shared-toggleswitch).
 - `sidebar/icon_bar.py` creates panel buttons from icon text. Semantic names
-  need to be supplied independently of the displayed glyph.
+  need to be supplied independently of the displayed glyph; a tooltip alone
+  is not an accessible name.
 - `StyleTab._field_row` places a QLabel beside a field without a buddy or
-  accessible-name association. Repeated labels such as "Match line" also need
-  the group context, for example "Markers: match line color".
+  accessible-name association (`setBuddy` is not used anywhere). Repeated
+  labels such as "Match line" also need the group context, for example
+  "Markers: match line color".
 - `PanelArea.show_panel` switches the stacked widget; sidebar collapse hides
   it. There is no explicit focus handoff for these transitions.
-- ThemeManager's global stylesheet has no explicit `:focus` rules. A custom
-  painted control cannot rely on Qt drawing a focus indicator for it.
+- ThemeManager's global stylesheet has no explicit `:focus` rules. Custom
+  painted controls draw their own ring, so each theme must keep it visible.
 
-An offscreen check of the current ToggleSwitch reports `NoFocus`, accessible
-`Role.Client`, no checkable state and no name. Space does not toggle it.
-A stock QCheckBox reports `Role.CheckBox`, checkable state and the supplied
-text as its name; Space updates both its value and accessible checked state.
 These are Qt interface checks, not tests with a native screen reader.
 
 ## Ownership
@@ -49,32 +64,47 @@ editing, menus and Qt's dialog handling.
 
 ## Shared ToggleSwitch
 
-Use a QCheckBox-derived control with the existing pill paint treatment.
-QCheckBox supplies Qt's checkable role, checked-state model and button
-activation. A generic QWidget with only `setAccessibleName` is insufficient:
-it still lacks the checkable semantics required by #339.
+Keep `ToggleSwitch` as a `QAbstractButton` with the existing pill paint
+treatment. It already gets Qt's checkable role, checked-state model, Space
+activation and disabled behavior. Unlike a `QCheckBox` subclass it is not
+matched by `QCheckBox` or `QCheckBox::indicator` selectors (for example those
+in `chart_wizard.py`), so theme rules for check boxes cannot leak into the
+painted control. Switch to `QCheckBox` only if native checks show a real gap.
+A custom `QAccessible` factory is not needed for the same reason.
 
-- Retain the `checked=` constructor, `isChecked()`, keyword-compatible
-  `setChecked(checked=...)`, `toggled(bool)` and `set_tokens()` contract.
-  Use Qt's checked state as the single source of truth; do not keep `_checked`
-  or a second signal. Existing signal-blocked model-to-view updates must work.
-- Use StrongFocus so the switch can be reached by Tab and mouse focus.
-  Let Qt handle Space, clicks and disabled behavior. Add explicit Enter and
-  keypad Enter activation, consume those events so a parent dialog's default
-  action does not fire, and ignore key auto-repeat for that activation.
-- Preserve the pill appearance, but allow room for a visible focus ring.
-  Repaint on focus changes. Check the new size and clipping in existing forms,
-  at high DPI and in both themes before landing the change.
-- Keep disabled controls non-interactive and expose their disabled state.
-  Calling `setChecked` programmatically still emits only on an actual change.
+- Qt's checked state is the single source of truth; do not keep a `_checked`
+  field or a second signal. Signal-blocked model-to-view updates must keep
+  working, and a programmatic `setChecked` emits only on an actual change.
+- **Space only.** Remove the Enter/Return handler. Native check boxes do not
+  toggle on Enter, and Qt forwards Enter to the parent dialog's default
+  button, so handling it makes a dialog's Enter flip a toggle instead of
+  accepting. Issue #339 does not ask for Enter. Enter and keypad Enter must
+  leave the switch unchanged and reach the dialog.
+- **`setChecked` signature.** `setChecked` is a Qt slot that can be connected
+  positionally (`toggled.connect(other.setChecked)`). The keyword-only
+  override (`setChecked(self, *, checked)`) raises `TypeError` for such a
+  connection. Today every caller uses `setChecked(checked=...)` and none
+  connects the slot directly, so nothing breaks. Keep it that way: connect
+  through a lambda or a named method, and state in the implementation PR
+  whether the override stays or is dropped in favor of `# noqa: FBT003` at
+  positional call sites.
+- **Painting and layout.** The control paints itself, so it must also own its
+  geometry: keep `sizeHint` and the fixed size matching the pill, restrict
+  `hitButton` to the pill so clicks outside it do not toggle, and repaint on
+  focus changes. If the focus ring needs room beyond the pill, check clipping
+  in existing forms, at high DPI and in both themes.
+- **Focus policy.** `StrongFocus` also accepts focus on click, so clicking a
+  switch takes focus from a text field being edited. That matches other
+  buttons; use `TabFocus` instead if it proves disruptive in the forms.
+- **Role.** Qt has no switch role, so assistive technology announces a check
+  box with a checked state, not a switch. This is acceptable; docs and tests
+  must not claim switch semantics.
 - Require a meaningful accessible name at each use. Where a visible label is
   available, use it as the source; for repeated fields include the section
-  context. Do not give all switches the same fallback name "Toggle".
-
-This changes a QWidget subclass to a QCheckBox subclass. Audit call sites,
-Qt stylesheet selectors and storybook rendering for inherited behavior,
-not only the public Python methods. Prefer this native base over a custom
-QAccessible factory; revisit only if native platform checks show a real gap.
+  context. Do not give all switches the same fallback name "Toggle". This is
+  how the AGENTS.md rule is met for this control: custom-painted controls need
+  `setAccessibleName`/`setAccessibleDescription` and must be focusable and
+  activatable.
 
 ## Traversal and labels
 
@@ -106,40 +136,52 @@ text editing, combo-box arrow behavior and table navigation unchanged.
   default action and Escape cancellation.
 
 These container changes are follow-up work. They are not prerequisites for
-using Qt's native checkable behavior in ToggleSwitch, but need tests before
-claiming keyboard access across the application.
+the ToggleSwitch fixes, but need tests before claiming keyboard access across
+the application.
 
 ## Delivery sequence
 
-1. Review this design and agree on the native checkable base and focus handoff
-   rules. This document-only PR should reference #339, not close it.
-2. Implement the shared ToggleSwitch, name its existing uses, update the
-   storybook, and add focused regression tests. Include screenshots for focus
-   and disabled states in light/dark themes.
+1. Review this plan. This document-only PR references #339, not closes it.
+2. Fix `ToggleSwitch`: remove the Enter handler, cover `hitButton` and
+   `sizeHint`, name every existing use, update the storybook, and add focused
+   regression tests. Include screenshots for focus and disabled states in
+   light and dark themes.
 3. Audit panel navigation, local form order, icon names and dialog restoration.
    Land those changes in small follow-ups with tests for the affected flows.
 
 ## Verification
 
-The first implementation needs automated checks for:
+Automated checks for the ToggleSwitch fixes:
 
 - Tab/Shift+Tab reaching the switch in a real form; disabled and hidden
-  switches skipped; Space, Enter and keypad Enter each changing state once.
+  switches skipped; Space changing state once; Enter and keypad Enter leaving
+  it unchanged.
 - One `toggled` emission per state change, unchanged assignments silent,
   blocked signals remaining blocked, and no double activation from key repeat.
-- QAccessible role CheckBox, a non-empty contextual name, and checkable,
-  checked, disabled and focus state consistent with the widget.
-- Enter on the switch not accepting a parent dialog; unrelated keys retaining
-  Qt behavior; mouse activation and programmatic updates unchanged.
+- QAccessible role CheckBox (not a switch role), a non-empty contextual name,
+  and checkable, checked, disabled and focus state consistent with the widget.
+- Enter on the switch accepting the parent dialog through its default button;
+  unrelated keys retaining Qt behavior; clicks outside the pill not toggling;
+  mouse activation and programmatic updates unchanged.
 - Focus surviving panel switching/collapse and dynamic controls without
   escaping to a hidden widget or stealing focus from another editor.
 
 Run existing toggle, style-panel and common-widget tests alongside these.
 Inspect actual focus-ring pixels, theme contrast and layout clipping.
-Then manually test native screen-reader output with NVDA on Windows and
-VoiceOver on macOS, including names, role, checked state and disabled state.
+
+Then test native screen-reader output, including names, role, checked state,
+disabled state and Tab reachability:
+
+| Platform | Screen reader | Notes |
+| --- | --- | --- |
+| Windows | NVDA, Narrator | Qt exposes the UI Automation bridge by default. |
+| macOS | VoiceOver | Tab may skip buttons and check boxes unless "Full Keyboard Access" is on in System Settings. Confirm the switch behaves like other buttons and is not unreachable. |
+| Ubuntu | Orca | Qt reaches Orca through AT-SPI, which needs the accessibility bus and may need `QT_ACCESSIBILITY=1`. Check X11 and Wayland sessions and the focus ring under the system theme. |
+
 Offscreen pytest and QAccessible inspection alone do not establish native
-screen-reader support or cross-platform focus behavior.
+screen-reader support or cross-platform focus behavior. The macOS and Ubuntu
+rows are expectations to confirm, not results from this audit; Space, Enter
+and Tab behavior was exercised offscreen on Windows only.
 
 ## References
 
