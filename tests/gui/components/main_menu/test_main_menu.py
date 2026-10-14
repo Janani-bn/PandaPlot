@@ -202,6 +202,14 @@ class TestMainMenuUndoRedoActions:
         assert menu.undo_action.text() == "Undo"
         assert menu.redo_action.text() == "Redo Delete chart"
 
+    def test_ampersand_in_description_is_not_treated_as_mnemonic(self, app_context):
+        command_executor = app_context.get_command_executor()
+        command_executor.can_undo.return_value = True
+        command_executor.get_undo_description.return_value = "Rename column A&B"
+        menu = MainMenu(parent=None, app_context=app_context)
+
+        assert menu.undo_action.text() == "Undo Rename column A&&B"
+
     def test_labels_follow_execute_undo_redo_and_clear_history(self, app_context):
         class NamedCommand(Command):
             def __init__(self, name):

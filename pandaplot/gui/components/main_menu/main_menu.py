@@ -265,6 +265,13 @@ class MainMenu(PMenuBar):
         self._update_undo_redo_actions()
         return edit_menu
 
+    @staticmethod
+    def _history_action_label(verb: str, description: str | None) -> str:
+        """Build an Undo/Redo label; '&' is doubled so Qt doesn't read it as a mnemonic."""
+        if not description:
+            return verb
+        return f"{verb} {description.replace('&', '&&')}"
+
     def _update_undo_redo_actions(self, _event_data: dict | None = None):
         """Sync the Undo/Redo actions' enabled state with CommandExecutor's
         stacks. Disabling a QAction also disables its keyboard shortcut, so
@@ -273,8 +280,8 @@ class MainMenu(PMenuBar):
         command_executor = self.app_context.get_command_executor()
         undo_description = command_executor.get_undo_description()
         redo_description = command_executor.get_redo_description()
-        self.undo_action.setText(f"Undo {undo_description}" if undo_description else "Undo")
-        self.redo_action.setText(f"Redo {redo_description}" if redo_description else "Redo")
+        self.undo_action.setText(self._history_action_label("Undo", undo_description))
+        self.redo_action.setText(self._history_action_label("Redo", redo_description))
         self.undo_action.setEnabled(command_executor.can_undo())
         self.redo_action.setEnabled(command_executor.can_redo())
 
